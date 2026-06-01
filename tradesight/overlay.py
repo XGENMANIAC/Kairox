@@ -11,6 +11,7 @@ _SIGNAL_COLORS = {"BUY": "#1db954", "SELL": "#e0245e", "HOLD": "#888888"}
 _BG = "#15171c"
 _FG = "#e6e6e6"
 _MUTED = "#7a7f8a"
+_ACCENT = "#1db954"
 
 
 class Overlay:
@@ -33,21 +34,32 @@ class Overlay:
         self._panel = tk.Frame(self.root, bg=_BG)
         self._build_tab()
         self._build_panel()
-        self._show_tab()
+        # Start expanded so the overlay is unmistakable on first launch;
+        # the user can collapse to the tab afterwards.
+        self._expand()
+        self._raise_above()
 
         self.root.after(100, self._drain)
 
     # ---- geometry ---------------------------------------------------------
+    def _raise_above(self):
+        """Force the borderless window to the front (topmost can be flaky)."""
+        self.root.lift()
+        self.root.attributes("-topmost", True)
+
     def _place_right_edge(self):
         self.root.update_idletasks()
         sw = self.root.winfo_screenwidth()
-        self.root.geometry(f"60x30+{sw - 64}+200")
+        # Wide enough for the label to fit at any DPI scaling.
+        self.root.geometry(f"150x40+{sw - 162}+200")
 
     def _build_tab(self):
-        btn = tk.Label(self._tab, text="TradeSight ▶", bg=_BG, fg=_FG,
-                       font=("Segoe UI", 8), cursor="hand2", padx=4, pady=6)
+        btn = tk.Label(self._tab, text="TradeSight ▶", bg=_ACCENT,
+                       fg="#0b0c0f", font=("Segoe UI", 11, "bold"),
+                       cursor="hand2", padx=8, pady=8)
         btn.pack(fill="both", expand=True)
         btn.bind("<Button-1>", lambda _e: self._expand())
+        self._tab.configure(highlightbackground=_ACCENT, highlightthickness=2)
 
     def _build_panel(self):
         self._labels = {}
@@ -102,11 +114,13 @@ class Overlay:
         sw = self.root.winfo_screenwidth()
         self.root.geometry(f"320x480+{sw - 332}+120")
         self._panel.pack(fill="both", expand=True)
+        self._raise_above()
 
     def _collapse(self):
         self._expanded = False
         self._place_right_edge()
         self._show_tab()
+        self._raise_above()
 
     # ---- rendering --------------------------------------------------------
     def set_status(self, text: str):
