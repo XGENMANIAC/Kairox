@@ -47,9 +47,11 @@ class ChartAnalyzer:
     def _parse_json(text: str) -> dict:
         text = text.strip()
         if text.startswith("```"):
-            text = text.strip("`")
-            if text.lstrip().lower().startswith("json"):
-                text = text.lstrip()[4:]
+            # strip only the opening fence line and the closing fence,
+            # not backticks that may appear inside the JSON itself
+            text = re.sub(r"^```[a-zA-Z0-9]*\n?", "", text)
+            text = re.sub(r"\n?```\s*$", "", text)
+            text = text.strip()
         try:
             return json.loads(text)
         except json.JSONDecodeError:

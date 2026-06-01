@@ -90,3 +90,29 @@ def test_bad_json_then_error_state():
     result = analyzer.analyze("b64", session(), None)
     assert result.error is not None
     assert result.signal == "HOLD"
+
+
+def test_parse_json_bare_fence_without_lang():
+    text = '```\n{"a": 1}\n```'
+    assert ChartAnalyzer._parse_json(text) == {"a": 1}
+
+
+def test_parse_json_preserves_internal_backtick():
+    text = '```json\n{"note": "use `git` here"}\n```'
+    assert ChartAnalyzer._parse_json(text)["note"] == "use `git` here"
+
+
+def test_parse_json_raises_on_no_object():
+    import json as _json
+    import pytest
+    with pytest.raises(_json.JSONDecodeError):
+        ChartAnalyzer._parse_json("no json here at all")
+
+
+def test_chat_retry_recovers_on_second_call():
+    # First response is garbage, retry returns valid JSON -> good value returned.
+    client = FakeClient(["totally not json", '{"chart_detected": false}'])
+    analyzer = ChartAnalyzer(client, cfg())
+    result = analyzer.analyze("b64", session(), None)
+    assert result.chart_detected is False
+    assert len(client.calls) == 2  # original + one repair retry
