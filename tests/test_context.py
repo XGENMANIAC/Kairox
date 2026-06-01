@@ -45,3 +45,32 @@ def test_friday_close_caution():
 def test_offhours():
     info = SessionContext.describe(at(2026, 6, 6, 10))
     assert info.session == "Off-hours"
+
+
+def test_midnight_tokyo_sydney_tiebreak():
+    # 00:00 UTC Wednesday: Sydney (21-06) + Tokyo (00-09) open -> Tokyo wins priority
+    info = SessionContext.describe(at(2026, 6, 3, 0))
+    assert info.session == "Tokyo"
+    assert info.is_overlap is False
+    assert info.minutes_to_next == 420  # next open London 07:00
+
+
+def test_sydney_just_opened_wraps_to_tokyo():
+    # 21:30 UTC Wednesday: Sydney just opened; next open Tokyo 00:00 -> 150 min (wrap)
+    info = SessionContext.describe(at(2026, 6, 3, 21, 30))
+    assert info.session == "Sydney"
+    assert info.minutes_to_next == 150
+
+
+def test_sydney_closes_at_six():
+    # 06:30 UTC Wednesday: Sydney closed at 06:00, Tokyo still open
+    info = SessionContext.describe(at(2026, 6, 3, 6, 30))
+    assert info.session == "Tokyo"
+    assert info.minutes_to_next == 30  # London 07:00
+
+
+def test_london_closes_ny_continues():
+    # 16:30 UTC Wednesday: London closed at 16:00, NY open, no overlap
+    info = SessionContext.describe(at(2026, 6, 3, 16, 30))
+    assert info.session == "New York"
+    assert info.is_overlap is False
