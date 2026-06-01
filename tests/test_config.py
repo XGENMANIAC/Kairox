@@ -27,3 +27,19 @@ def test_load_reads_overrides_from_env():
     cfg = Config.load(env=env)
     assert cfg.capture_interval == 15
     assert cfg.vision_model == "custom/vision"
+
+
+def test_load_reads_tuning_overrides():
+    env = {
+        "NIM_API_KEY": "n", "TAVILY_API_KEY": "t",
+        "PIXEL_DIFF_THRESHOLD": "5.5", "NEWS_CACHE_TTL": "60",
+    }
+    cfg = Config.load(env=env)
+    assert cfg.pixel_diff_threshold == 5.5
+    assert cfg.news_cache_ttl == 60
+
+
+def test_tuning_defaults_when_absent():
+    cfg = Config.load(env={"NIM_API_KEY": "n", "TAVILY_API_KEY": "t"})
+    assert cfg.pixel_diff_threshold == 2.0
+    assert cfg.news_cache_ttl == 300

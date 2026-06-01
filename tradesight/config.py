@@ -51,4 +51,6 @@ class Config:
             reasoning_model=env.get("REASONING_MODEL", DEFAULT_REASONING_MODEL),
             capture_interval=int(env.get("CAPTURE_INTERVAL", 30)),
             capture_region=env.get("CAPTURE_REGION", "full"),
+            pixel_diff_threshold=float(env.get("PIXEL_DIFF_THRESHOLD", 2.0)),
+            news_cache_ttl=int(env.get("NEWS_CACHE_TTL", 300)),
         )
