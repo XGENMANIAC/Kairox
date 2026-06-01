@@ -12,7 +12,7 @@ class ConfigError(Exception):
 
 
 DEFAULT_VISION_MODEL = "meta/llama-3.2-90b-vision-instruct"
-DEFAULT_REASONING_MODEL = "moonshotai/kimi-k2-instruct-0905"
+DEFAULT_REASONING_MODEL = "moonshotai/kimi-k2.6"
 
 
 @dataclass
