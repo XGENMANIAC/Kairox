@@ -63,25 +63,72 @@ class Overlay:
 
     def _build_panel(self):
         self._labels = {}
+
+        # --- fixed header (always visible at top) ---
         header = tk.Frame(self._panel, bg=_BG)
-        header.pack(fill="x")
+        header.pack(fill="x", side="top")
         tk.Label(header, text="TradeSight AI", bg=_BG, fg=_FG,
                  font=("Segoe UI", 10, "bold")).pack(side="left", padx=6, pady=4)
-        tk.Button(header, text="▼", command=self._collapse, bd=0, bg=_BG,
-                  fg=_FG).pack(side="right", padx=2)
+        collapse = tk.Button(header, text="▼", bd=0, bg=_BG, fg=_FG,
+                             activebackground=_ACCENT, cursor="hand2")
+        collapse.configure(command=lambda: self._click(collapse, self._collapse))
+        collapse.pack(side="right", padx=2)
+
+        # --- fixed footer (buttons + status + disclaimer, always visible) ---
+        footer = tk.Frame(self._panel, bg=_BG)
+        footer.pack(fill="x", side="bottom")
+        btns = tk.Frame(footer, bg=_BG)
+        btns.pack(fill="x", pady=6)
+        self._refresh_btn = tk.Button(btns, text="Refresh Now", bd=2,
+                                      relief="raised", bg="#2a2f3a", fg=_FG,
+                                      activebackground=_ACCENT, cursor="hand2")
+        self._refresh_btn.configure(
+            command=lambda: self._click(self._refresh_btn, self._on_refresh))
+        self._refresh_btn.pack(side="left", padx=8)
+        self._settings_btn = tk.Button(btns, text="Settings", bd=2,
+                                       relief="raised", bg="#2a2f3a", fg=_FG,
+                                       activebackground=_ACCENT, cursor="hand2")
+        self._settings_btn.configure(
+            command=lambda: self._click(self._settings_btn, self._on_settings))
+        self._settings_btn.pack(side="left")
+        self._status_label = tk.Label(footer, text="Starting…", bg=_BG,
+                                       fg=_MUTED, font=("Segoe UI", 7))
+        self._status_label.pack(anchor="w", padx=8)
+        tk.Label(footer, text="⚠ Not financial advice — AI can misread charts",
+                 bg=_BG, fg=_MUTED, font=("Segoe UI", 7)).pack(pady=(2, 6))
+
+        # --- scrollable body between header and footer ---
+        body = tk.Frame(self._panel, bg=_BG)
+        body.pack(fill="both", expand=True, side="top")
+        canvas = tk.Canvas(body, bg=_BG, highlightthickness=0)
+        scrollbar = tk.Scrollbar(body, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        inner = tk.Frame(canvas, bg=_BG)
+        win = canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>",
+                   lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>",
+                    lambda e: canvas.itemconfigure(win, width=e.width))
+        # Mouse-wheel scrolling while the pointer is over the panel.
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all(
+            "<MouseWheel>",
+            lambda ev: canvas.yview_scroll(int(-ev.delta / 120), "units")))
+        canvas.bind("<Leave>", lambda _e: canvas.unbind_all("<MouseWheel>"))
 
         def row(key, title):
-            tk.Label(self._panel, text=title, bg=_BG, fg=_MUTED,
+            tk.Label(inner, text=title, bg=_BG, fg=_MUTED,
                      font=("Segoe UI", 7)).pack(anchor="w", padx=8)
-            lbl = tk.Label(self._panel, text="—", bg=_BG, fg=_FG,
-                           justify="left", wraplength=300,
-                           font=("Segoe UI", 9), anchor="w")
+            lbl = tk.Label(inner, text="—", bg=_BG, fg=_FG, justify="left",
+                           wraplength=288, font=("Segoe UI", 9), anchor="w")
             lbl.pack(anchor="w", fill="x", padx=8)
             self._labels[key] = lbl
 
         row("pair", "PAIR DETECTED")
         row("session", "SESSION")
-        self._signal = tk.Label(self._panel, text="—", bg=_BG, fg=_FG,
+        self._signal = tk.Label(inner, text="—", bg=_BG, fg=_FG,
                                 font=("Segoe UI", 16, "bold"))
         self._signal.pack(anchor="w", padx=8, pady=(6, 0))
         row("confidence", "CONFIDENCE")
@@ -89,19 +136,19 @@ class Overlay:
         row("news", "NEWS IMPACT")
         row("updated", "LAST UPDATED")
 
-        btns = tk.Frame(self._panel, bg=_BG)
-        btns.pack(fill="x", pady=6)
-        tk.Button(btns, text="Refresh Now", command=self._on_refresh, bd=0,
-                  bg="#2a2f3a", fg=_FG).pack(side="left", padx=8)
-        tk.Button(btns, text="Settings", command=self._on_settings, bd=0,
-                  bg="#2a2f3a", fg=_FG).pack(side="left")
+    def _click(self, btn: tk.Button, action: Callable[[], None]):
+        """Give a visible press (sunken→raised flash) then run the action."""
+        try:
+            btn.configure(relief="sunken")
+            btn.after(120, lambda: btn.configure(relief="raised"))
+        except tk.TclError:
+            pass
+        action()
 
-        self._status_label = tk.Label(self._panel, text="Starting…", bg=_BG,
-                                       fg=_MUTED, font=("Segoe UI", 7))
-        self._status_label.pack(anchor="w", padx=8)
-        tk.Label(self._panel,
-                 text="⚠ Not financial advice — AI can misread charts",
-                 bg=_BG, fg=_MUTED, font=("Segoe UI", 7)).pack(pady=(2, 6))
+    def _clear_rows(self):
+        for key in ("session", "confidence", "reasoning", "news", "updated"):
+            self._labels[key].configure(text="—")
+        self._signal.configure(text="—", fg=_FG)
 
     # ---- state transitions ------------------------------------------------
     def _show_tab(self):
@@ -128,11 +175,12 @@ class Overlay:
 
     def render(self, a: Analysis):
         if not a.chart_detected:
-            self._signal.configure(text="—", fg=_FG)
+            self._clear_rows()
             self._labels["pair"].configure(text="No chart detected on screen")
             self.set_status("Waiting for a chart…")
             return
         if a.error:
+            self._clear_rows()
             self._labels["pair"].configure(
                 text="Analysis unavailable — retrying")
             self.set_status(a.error)
