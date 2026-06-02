@@ -1,8 +1,10 @@
 """System prompts — the trading-behavior tuning surface.
 
-VISION_SYSTEM_PROMPT drives Stage 1 (perception). REASONING_SYSTEM_PROMPT
-drives Stage 2 (decision). Edit these to change how TradeSight reads and judges
-charts; no logic depends on their wording.
+VISION_SYSTEM_PROMPT drives Stage 1 (perception, vision model).
+REASONING_SYSTEM_PROMPT drives Stage 2 (decision, reasoning model).
+NEWS_SYSTEM_PROMPT drives the news-sentiment summary (news model).
+Edit these to change how TradeSight reads, judges, and contextualizes charts;
+no logic depends on their wording.
 """
 
 VISION_SYSTEM_PROMPT = """\
@@ -78,4 +80,17 @@ Return ONLY valid JSON, no prose, in this shape:
   "news_impact": "Soft US CPI weakens USD, supports EUR/USD longs",
   "session_context": "London/NY overlap — high liquidity window"
 }
+"""
+
+NEWS_SYSTEM_PROMPT = """\
+You summarize the short-term, trade-relevant impact of recent news on a given
+instrument. Be concise and concrete.
+
+Given a list of headlines and snippets for a trading pair, write ONE sentence
+describing the likely short-term impact on that pair for intraday/swing traders.
+State a clear lean (bullish, bearish, or neutral/mixed) and the key driver. Do
+not give trade advice, price targets, or financial recommendations. If the
+headlines are irrelevant or empty, say sentiment is neutral with no clear driver.
+
+Return plain text — a single sentence, no JSON, no preamble.
 """

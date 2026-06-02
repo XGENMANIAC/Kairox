@@ -9,6 +9,7 @@ def test_load_returns_config_with_required_keys():
     assert cfg.tavily_api_key == "tav456"
     assert cfg.vision_model == "meta/llama-3.2-90b-vision-instruct"
     assert cfg.reasoning_model == "moonshotai/kimi-k2.6"
+    assert cfg.news_model == "meta/llama-3.1-8b-instruct"
     assert cfg.capture_interval == 30
 
 
@@ -22,11 +23,12 @@ def test_load_reads_overrides_from_env():
     env = {
         "NIM_API_KEY": "n", "TAVILY_API_KEY": "t",
         "CAPTURE_INTERVAL": "15", "CAPTURE_REGION": "full",
-        "VISION_MODEL": "custom/vision",
+        "VISION_MODEL": "custom/vision", "NEWS_MODEL": "custom/news",
     }
     cfg = Config.load(env=env)
     assert cfg.capture_interval == 15
     assert cfg.vision_model == "custom/vision"
+    assert cfg.news_model == "custom/news"
 
 
 def test_load_reads_tuning_overrides():

@@ -13,6 +13,7 @@ class ConfigError(Exception):
 
 DEFAULT_VISION_MODEL = "meta/llama-3.2-90b-vision-instruct"
 DEFAULT_REASONING_MODEL = "moonshotai/kimi-k2.6"
+DEFAULT_NEWS_MODEL = "meta/llama-3.1-8b-instruct"
 
 
 @dataclass
@@ -22,6 +23,7 @@ class Config:
     base_url: str = "https://integrate.api.nvidia.com/v1"
     vision_model: str = DEFAULT_VISION_MODEL
     reasoning_model: str = DEFAULT_REASONING_MODEL
+    news_model: str = DEFAULT_NEWS_MODEL
     capture_interval: int = 30
     capture_region: str = "full"
     pixel_diff_threshold: float = 2.0
@@ -49,6 +51,7 @@ class Config:
             tavily_api_key=tav,
             vision_model=env.get("VISION_MODEL", DEFAULT_VISION_MODEL),
             reasoning_model=env.get("REASONING_MODEL", DEFAULT_REASONING_MODEL),
+            news_model=env.get("NEWS_MODEL", DEFAULT_NEWS_MODEL),
             capture_interval=int(env.get("CAPTURE_INTERVAL", 30)),
             capture_region=env.get("CAPTURE_REGION", "full"),
             pixel_diff_threshold=float(env.get("PIXEL_DIFF_THRESHOLD", 2.0)),

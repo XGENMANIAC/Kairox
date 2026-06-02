@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional
 import requests
 
 from .config import Config
+from .prompts import NEWS_SYSTEM_PROMPT
 
 _TAVILY_URL = "https://api.tavily.com/search"
 
@@ -51,13 +52,11 @@ class NewsService:
     def _summarize(self, pair: str, headlines: list[str]) -> str:
         joined = "\n".join(headlines) or "No notable headlines."
         resp = self._client.chat.completions.create(
-            model=self._cfg.reasoning_model,
+            model=self._cfg.news_model,
             messages=[
-                {"role": "system",
-                 "content": "You summarize forex news impact in one sentence."},
+                {"role": "system", "content": NEWS_SYSTEM_PROMPT},
                 {"role": "user",
-                 "content": (f"In one sentence, the likely short-term impact on "
-                             f"{pair} for traders:\n{joined}")},
+                 "content": (f"Pair: {pair}\nHeadlines:\n{joined}")},
             ],
             temperature=0.3, max_tokens=120,
         )
