@@ -1,3 +1,5 @@
+import json
+
 from tradesight.config import Config
 from tradesight.news import NewsService
 
@@ -16,10 +18,12 @@ class FakeClient:
     def __init__(self, content):
         outer = self
         self.calls = 0
+        self.last_user = None
 
         class _Completions:
             def create(self, **kwargs):
                 outer.calls += 1
+                outer.last_user = kwargs["messages"][-1]["content"]
                 return _Resp(content)
 
         self.chat = type("C", (), {"completions": _Completions()})()
@@ -40,43 +44,55 @@ def cfg():
     return Config.load(env={"NIM_API_KEY": "n", "TAVILY_API_KEY": "t"})
 
 
-def test_sentiment_fetches_and_summarizes():
+REPORT_JSON = json.dumps({
+    "pair": "EUR/USD", "net_sentiment": "bullish", "sentiment_strength": 0.7,
+    "summary": "Soft USD supports EUR/USD.",
+    "event_risk": {"event_risk_imminent": False},
+})
+
+
+def test_report_returns_parsed_dict_and_passes_dated_items():
     posts = []
 
     def fake_post(url, json=None, timeout=None):
         posts.append(json)
         return FakeResponse({"results": [
-            {"title": "EUR rises", "content": "ECB hawkish"},
-            {"title": "USD soft", "content": "CPI cools"},
+            {"title": "EUR rises", "content": "ECB hawkish",
+             "url": "https://reuters.com/x", "published_date": "2026-06-02"},
         ]})
 
-    client = FakeClient("USD weakness supports EUR/USD longs")
+    client = FakeClient(REPORT_JSON)
     svc = NewsService(client, cfg(), http_post=fake_post)
-    text, available = svc.sentiment("EUR/USD")
+    report, available = svc.report("EUR/USD")
 
     assert available is True
-    assert "EUR/USD" in text or "EUR" in text
-    assert posts[0]["query"]  # a query was sent to Tavily
+    assert report["net_sentiment"] == "bullish"
+    # the news model received structured, dated, sourced items + currencies
+    sent = json.loads(client.last_user)
+    assert sent["base_currency"] == "EUR" and sent["quote_currency"] == "USD"
+    assert sent["tavily_results"][0]["published_date"] == "2026-06-02"
+    assert sent["tavily_results"][0]["source"] == "reuters.com"
+    assert "current_utc_time" in sent
 
 
-def test_sentiment_cached_within_ttl():
+def test_report_cached_within_ttl():
     calls = {"n": 0}
 
     def fake_post(url, json=None, timeout=None):
         calls["n"] += 1
-        return FakeResponse({"results": [{"title": "x", "content": "y"}]})
+        return FakeResponse({"results": [{"title": "x", "content": "y",
+                                          "url": "https://a.com"}]})
 
     clock = {"t": 1000.0}
-    client = FakeClient("flat")
-    svc = NewsService(client, cfg(), http_post=fake_post,
+    svc = NewsService(FakeClient(REPORT_JSON), cfg(), http_post=fake_post,
                       now=lambda: clock["t"])
 
-    svc.sentiment("EUR/USD")
-    svc.sentiment("EUR/USD")  # within TTL -> no second fetch
+    svc.report("EUR/USD")
+    svc.report("EUR/USD")  # within TTL -> no second fetch
     assert calls["n"] == 1
 
     clock["t"] += 10_000  # past TTL
-    svc.sentiment("EUR/USD")
+    svc.report("EUR/USD")
     assert calls["n"] == 2
 
 
@@ -84,7 +100,7 @@ def test_tavily_failure_returns_unavailable():
     def fake_post(url, json=None, timeout=None):
         raise ConnectionError("down")
 
-    svc = NewsService(FakeClient("x"), cfg(), http_post=fake_post)
-    text, available = svc.sentiment("EUR/USD")
-    assert text is None
+    svc = NewsService(FakeClient(REPORT_JSON), cfg(), http_post=fake_post)
+    report, available = svc.report("EUR/USD")
+    assert report is None
     assert available is False

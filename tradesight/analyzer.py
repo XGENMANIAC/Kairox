@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .config import Config
 from .context import SessionInfo
+from .jsonutil import parse_json_object
 from .prompts import REASONING_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT
-
-_JSON_OBJ = re.compile(r"\{.*\}", re.DOTALL)
 
 
 @dataclass
 class Analysis:
+    # --- Stage 1 (vision) observations, flattened for the UI ---
     pair: Optional[str] = None
     timeframe: Optional[str] = None
     trend: Optional[str] = None
@@ -24,18 +23,38 @@ class Analysis:
     indicators: dict = field(default_factory=dict)
     candlestick_signal: Optional[str] = None
     momentum: Optional[str] = None
+    # --- Stage 2 (reasoning) decision ---
     signal: str = "HOLD"
     confidence: int = 0
     entry_zone: Optional[str] = None
     stop_loss: Optional[str] = None
     take_profit: Optional[str] = None
+    risk_reward: Optional[float] = None
     reasoning: list = field(default_factory=list)
+    invalidation_condition: Optional[str] = None
+    what_to_watch: Optional[str] = None
+    hold_reason: Optional[str] = None
+    confluence: dict = field(default_factory=dict)
+    # --- news + session context ---
     news_impact: Optional[str] = None
+    news_sentiment: Optional[str] = None
+    event_risk_imminent: bool = False
     session_context: Optional[str] = None
+    # --- status flags ---
     chart_detected: bool = True
     news_available: bool = True
     error: Optional[str] = None
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+def _g(d: Any, *path, default=None):
+    """Safe nested getter: _g(obj, 'a', 'b') -> obj['a']['b'] or default."""
+    cur = d
+    for key in path:
+        if not isinstance(cur, dict):
+            return default
+        cur = cur.get(key)
+    return cur if cur is not None else default
 
 
 class ChartAnalyzer:
@@ -45,20 +64,7 @@ class ChartAnalyzer:
 
     @staticmethod
     def _parse_json(text: str) -> dict:
-        text = text.strip()
-        if text.startswith("```"):
-            # strip only the opening fence line and the closing fence,
-            # not backticks that may appear inside the JSON itself
-            text = re.sub(r"^```[a-zA-Z0-9]*\n?", "", text)
-            text = re.sub(r"\n?```\s*$", "", text)
-            text = text.strip()
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            match = _JSON_OBJ.search(text)
-            if match:
-                return json.loads(match.group(0))
-            raise
+        return parse_json_object(text)
 
     def _chat(self, model: str, system: str, user_content: Any) -> dict:
         """One call with one repair retry on bad JSON."""
@@ -67,17 +73,17 @@ class ChartAnalyzer:
             {"role": "user", "content": user_content},
         ]
         resp = self._client.chat.completions.create(
-            model=model, messages=messages, temperature=0.2, max_tokens=1024)
+            model=model, messages=messages, temperature=0.2, max_tokens=2048)
         content = resp.choices[0].message.content
         try:
-            return self._parse_json(content)
+            return parse_json_object(content)
         except json.JSONDecodeError:
             messages.append({"role": "assistant", "content": content})
             messages.append({"role": "user",
                              "content": "Return ONLY valid JSON. No prose."})
             resp = self._client.chat.completions.create(
-                model=model, messages=messages, temperature=0.0, max_tokens=1024)
-            return self._parse_json(resp.choices[0].message.content)
+                model=model, messages=messages, temperature=0.0, max_tokens=2048)
+            return parse_json_object(resp.choices[0].message.content)
 
     def _vision(self, image_b64: str) -> dict:
         user = [
@@ -88,53 +94,90 @@ class ChartAnalyzer:
         return self._chat(self._cfg.vision_model, VISION_SYSTEM_PROMPT, user)
 
     def _reason(self, obs: dict, session: SessionInfo,
-                news: Optional[str]) -> dict:
+                news_report: Optional[dict]) -> dict:
+        session_json = json.dumps({
+            "session": session.session,
+            "is_overlap": session.is_overlap,
+            "minutes_to_next": session.minutes_to_next,
+            "day_of_week": session.day_of_week,
+            "caution": session.caution,
+        })
+        news_json = (json.dumps(news_report) if news_report is not None
+                     else "No news report available — treat news as neutral.")
         user = (
-            f"Chart observations: {json.dumps(obs)}\n"
-            f"Session: {session.session} (overlap={session.is_overlap}, "
-            f"day={session.day_of_week}, caution={session.caution})\n"
-            f"News sentiment: {news or 'unavailable'}\n"
+            f"Vision report (Stage 1):\n{json.dumps(obs)}\n\n"
+            f"News report (Stage 1.5):\n{news_json}\n\n"
+            f"Session context:\n{session_json}\n\n"
             "Decide the trade and return JSON."
         )
         return self._chat(self._cfg.reasoning_model, REASONING_SYSTEM_PROMPT, user)
 
+    @staticmethod
+    def _candlestick_summary(obs: dict) -> Optional[str]:
+        patterns = obs.get("candlestick_patterns") or []
+        if not patterns or not isinstance(patterns[0], dict):
+            return None
+        first = patterns[0]
+        name = first.get("name")
+        pos = first.get("candle_position")
+        if name and pos:
+            return f"{name} ({pos})"
+        return name
+
     def analyze(self, image_b64: str, session: SessionInfo,
-                news: Optional[str]) -> Analysis:
-        news_available = news is not None
+                news_report: Optional[dict]) -> Analysis:
+        news_available = news_report is not None
         try:
             obs = self._vision(image_b64)
         except Exception as exc:  # noqa: BLE001 — surface as UI error, never crash
-            return Analysis(chart_detected=True, error=f"vision: {exc}",
-                            news_available=news_available)
+            return Analysis(error=f"vision: {exc}", news_available=news_available)
 
         if obs.get("chart_detected") is False:
             return Analysis(chart_detected=False, news_available=news_available)
 
+        pair = _g(obs, "metadata", "pair")
+        timeframe = _g(obs, "metadata", "timeframe")
+
         try:
-            decision = self._reason(obs, session, news)
+            decision = self._reason(obs, session, news_report)
         except Exception as exc:  # noqa: BLE001
-            return Analysis(chart_detected=True, error=f"reasoning: {exc}",
-                            news_available=news_available,
-                            pair=obs.get("pair"), timeframe=obs.get("timeframe"))
+            return Analysis(error=f"reasoning: {exc}", news_available=news_available,
+                            pair=pair, timeframe=timeframe)
+
+        ni = decision.get("news_integration") or {}
+        event_risk = bool(ni.get("event_risk_imminent")
+                          or _g(news_report or {}, "event_risk",
+                                "event_risk_imminent", default=False))
+        news_impact = (_g(news_report or {}, "summary")
+                       or ni.get("freshest_catalyst"))
+        news_sentiment = ni.get("net_sentiment") or _g(news_report or {},
+                                                       "net_sentiment")
 
         return Analysis(
-            pair=obs.get("pair"),
-            timeframe=obs.get("timeframe"),
-            trend=obs.get("trend"),
-            support_levels=obs.get("support_levels", []),
-            resistance_levels=obs.get("resistance_levels", []),
-            patterns_detected=obs.get("patterns_detected", []),
-            indicators=obs.get("indicators", {}),
-            candlestick_signal=obs.get("candlestick_signal"),
-            momentum=obs.get("momentum"),
+            pair=pair or decision.get("pair"),
+            timeframe=timeframe or decision.get("timeframe"),
+            trend=_g(obs, "market_structure", "trend"),
+            support_levels=_g(obs, "key_levels", "support", default=[]),
+            resistance_levels=_g(obs, "key_levels", "resistance", default=[]),
+            patterns_detected=[p.get("name") for p in (obs.get("chart_patterns")
+                               or []) if isinstance(p, dict) and p.get("name")],
+            indicators=obs.get("indicators") or {},
+            candlestick_signal=self._candlestick_summary(obs),
             signal=str(decision.get("signal", "HOLD")).upper(),
             confidence=int(decision.get("confidence", 0) or 0),
             entry_zone=decision.get("entry_zone"),
             stop_loss=decision.get("stop_loss"),
             take_profit=decision.get("take_profit"),
-            reasoning=decision.get("reasoning", []),
-            news_impact=decision.get("news_impact"),
-            session_context=decision.get("session_context"),
+            risk_reward=decision.get("risk_reward"),
+            reasoning=decision.get("reasoning") or [],
+            invalidation_condition=decision.get("invalidation_condition"),
+            what_to_watch=decision.get("what_to_watch"),
+            hold_reason=decision.get("hold_reason"),
+            confluence=decision.get("confluence_scores") or {},
+            news_impact=news_impact,
+            news_sentiment=news_sentiment,
+            event_risk_imminent=event_risk,
+            session_context=_g(decision, "session", "name") or session.session,
             chart_detected=True,
             news_available=news_available,
         )

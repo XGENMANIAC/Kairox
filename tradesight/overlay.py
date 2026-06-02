@@ -128,11 +128,20 @@ class Overlay:
 
         row("pair", "PAIR DETECTED")
         row("session", "SESSION")
+        self._event_label = tk.Label(inner, text="", bg=_BG,
+                                     fg=_SIGNAL_COLORS["SELL"], justify="left",
+                                     wraplength=288, font=("Segoe UI", 8, "bold"),
+                                     anchor="w")
+        self._event_label.pack(anchor="w", fill="x", padx=8)
         self._signal = tk.Label(inner, text="—", bg=_BG, fg=_FG,
                                 font=("Segoe UI", 16, "bold"))
         self._signal.pack(anchor="w", padx=8, pady=(6, 0))
         row("confidence", "CONFIDENCE")
+        row("plan", "TRADE PLAN")
         row("reasoning", "REASONING")
+        row("watch", "WHAT TO WATCH")
+        row("invalidation", "INVALIDATION")
+        row("hold", "WHY HOLD")
         row("news", "NEWS IMPACT")
         row("updated", "LAST UPDATED")
 
@@ -146,9 +155,11 @@ class Overlay:
         action()
 
     def _clear_rows(self):
-        for key in ("session", "confidence", "reasoning", "news", "updated"):
+        for key in ("session", "confidence", "plan", "reasoning", "watch",
+                    "invalidation", "hold", "news", "updated"):
             self._labels[key].configure(text="—")
         self._signal.configure(text="—", fg=_FG)
+        self._event_label.configure(text="")
 
     # ---- state transitions ------------------------------------------------
     def _show_tab(self):
@@ -191,11 +202,28 @@ class Overlay:
         self._signal.configure(text=a.signal,
                                fg=_SIGNAL_COLORS.get(a.signal, _FG))
         self._labels["confidence"].configure(text=f"{a.confidence}%")
+        if a.signal in ("BUY", "SELL") and a.entry_zone:
+            rr = f"   R:R {a.risk_reward}" if a.risk_reward else ""
+            plan = (f"Entry {a.entry_zone}\n"
+                    f"Stop {a.stop_loss or '—'}    Target {a.take_profit or '—'}"
+                    f"{rr}")
+        else:
+            plan = "—"
+        self._labels["plan"].configure(text=plan)
         bullets = "\n".join(f"• {r}" for r in (a.reasoning or [])) or "—"
         self._labels["reasoning"].configure(text=bullets)
+        self._labels["watch"].configure(text=a.what_to_watch or "—")
+        self._labels["invalidation"].configure(
+            text=a.invalidation_condition or "—")
+        self._labels["hold"].configure(text=a.hold_reason or "—")
         news = a.news_impact or ("news unavailable" if not a.news_available
                                  else "—")
+        if a.news_sentiment:
+            news = f"[{a.news_sentiment}] {news}"
         self._labels["news"].configure(text=news)
+        self._event_label.configure(
+            text=("⚠ High-impact news imminent — caution advised"
+                  if a.event_risk_imminent else ""))
         stamp = a.updated_at.astimezone(timezone.utc).strftime("%H:%M:%S UTC")
         self._labels["updated"].configure(text=stamp)
         self.set_status("Updated")

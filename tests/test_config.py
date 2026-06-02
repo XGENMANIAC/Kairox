@@ -9,7 +9,7 @@ def test_load_returns_config_with_required_keys():
     assert cfg.tavily_api_key == "tav456"
     assert cfg.vision_model == "meta/llama-3.2-90b-vision-instruct"
     assert cfg.reasoning_model == "moonshotai/kimi-k2.6"
-    assert cfg.news_model == "meta/llama-3.1-8b-instruct"
+    assert cfg.news_model == "meta/llama-3.3-70b-instruct"
     assert cfg.capture_interval == 30
 
 

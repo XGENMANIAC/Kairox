@@ -46,12 +46,12 @@ class TradeSightApp:
         self._refresh_now.clear()
 
         session = SessionContext.describe(datetime.now(timezone.utc))
-        news_text = None
+        news_report = None
         if self._last_pair:
-            news_text, _ = self._news.sentiment(self._last_pair)
+            news_report, _ = self._news.report(self._last_pair)
 
         b64 = self._capture.to_base64_png(img)
-        result = self._analyzer.analyze(b64, session, news_text)
+        result = self._analyzer.analyze(b64, session, news_report)
         if result.pair:
             self._last_pair = result.pair
         result.session_context = result.session_context or session.session
