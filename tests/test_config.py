@@ -73,7 +73,7 @@ def test_vision_key_with_nim_model_raises():
 
 def test_explicit_vision_base_url_overrides_default():
     cfg = Config.load(env={"NIM_API_KEY": "n", "TAVILY_API_KEY": "t",
-                           "VISION_API_KEY": "g",
+                           "VISION_API_KEY": "g", "VISION_MODEL": "llava-v1.6",
                            "VISION_BASE_URL": "https://api.groq.com/openai/v1"})
     assert cfg.vision_base_url == "https://api.groq.com/openai/v1"
     assert cfg.vision_on_separate_provider is True
