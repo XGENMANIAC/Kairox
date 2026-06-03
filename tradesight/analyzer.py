@@ -141,8 +141,11 @@ class ChartAnalyzer:
         return name
 
     def analyze(self, image_b64: str, session: SessionInfo,
-                news_report: Optional[dict]) -> Analysis:
+                news_report: Optional[dict],
+                on_stage: Optional[Any] = None) -> Analysis:
         news_available = news_report is not None
+        if on_stage:
+            on_stage("Reading chart…")
         try:
             obs = self._vision(image_b64)
         except (json.JSONDecodeError, TypeError):
@@ -167,6 +170,8 @@ class ChartAnalyzer:
             return Analysis(error="Couldn't read the chart fully — retrying",
                             news_available=news_available)
 
+        if on_stage:
+            on_stage(f"Analyzing {pair or 'chart'}…")
         try:
             decision = self._reason(obs, session, news_report)
         except Exception as exc:  # noqa: BLE001

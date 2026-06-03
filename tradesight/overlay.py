@@ -73,8 +73,23 @@ class Overlay:
                        fg="#0b0c0f", font=("Segoe UI", 11, "bold"),
                        cursor="hand2", padx=8, pady=8)
         btn.pack(fill="both", expand=True)
-        btn.bind("<Button-1>", lambda _e: self._expand())
+        # Drag to move, click (no drag) to expand.
+        btn.bind("<ButtonPress-1>", self._tab_press)
+        btn.bind("<B1-Motion>", self._tab_drag)
+        btn.bind("<ButtonRelease-1>", self._tab_release)
         self._tab.configure(highlightbackground=_ACCENT, highlightthickness=2)
+
+    def _tab_press(self, event):
+        self._drag_start(event)
+        self._tab_moved = False
+
+    def _tab_drag(self, event):
+        self._tab_moved = True
+        self._drag_move(event)
+
+    def _tab_release(self, _event):
+        if not getattr(self, "_tab_moved", False):
+            self._expand()
 
     def _build_panel(self):
         self._labels = {}

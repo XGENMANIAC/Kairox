@@ -22,7 +22,10 @@ log = logging.getLogger("tradesight")
 class TradeSightApp:
     def __init__(self, config: Config):
         self._cfg = config
-        self._client = OpenAI(base_url=config.base_url, api_key=config.nim_api_key)
+        # Cap per-call time and retries so a slow/stalled model surfaces as an
+        # error instead of freezing the UI on "Starting…" for minutes.
+        self._client = OpenAI(base_url=config.base_url, api_key=config.nim_api_key,
+                              timeout=90.0, max_retries=1)
         self._capture = CaptureService(region=config.capture_region,
                                        diff_threshold=config.pixel_diff_threshold)
         self._analyzer = ChartAnalyzer(self._client, config)
@@ -48,10 +51,13 @@ class TradeSightApp:
         session = SessionContext.describe(datetime.now(timezone.utc))
         news_report = None
         if self._last_pair:
+            self._ui_queue.put(f"Fetching {self._last_pair} news…")
             news_report, _ = self._news.report(self._last_pair)
 
         b64 = self._capture.to_base64_png(img)
-        result = self._analyzer.analyze(b64, session, news_report)
+        result = self._analyzer.analyze(
+            b64, session, news_report,
+            on_stage=lambda msg: self._ui_queue.put(msg))
         if result.pair:
             self._last_pair = result.pair
         result.session_context = result.session_context or session.session
