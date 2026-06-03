@@ -67,23 +67,27 @@ class ChartAnalyzer:
         return parse_json_object(text)
 
     def _chat(self, model: str, system: str, user_content: Any,
-              force_json: bool = True) -> dict:
+              force_json: bool = True, timeout: Optional[float] = None) -> dict:
         """One call with one repair retry on bad JSON.
 
         force_json toggles response_format. The vision model is left OFF: in
         JSON mode it gets lazy and emits a bare ``{"chart_detected": true}``
         instead of the full schema, so we use a plain call + robust parsing for
         it. Text models (reasoning, news) keep JSON mode on — they honour it.
+        timeout overrides the client default for this (possibly slow) call.
         """
         create = (create_json if force_json
                   else lambda c, m, msgs, **kw:
                   c.chat.completions.create(model=m, messages=msgs, **kw))
+        # Pass timeout only when set — the SDK treats an explicit None as
+        # "no timeout", which would override the client's default.
+        extra = {} if timeout is None else {"timeout": timeout}
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user_content},
         ]
         resp = create(self._client, model, messages,
-                      temperature=0.2, max_tokens=2048)
+                      temperature=0.2, max_tokens=2048, **extra)
         content = resp.choices[0].message.content
         try:
             return parse_json_object(content)
@@ -92,7 +96,7 @@ class ChartAnalyzer:
             messages.append({"role": "user",
                              "content": "Return ONLY valid JSON. No prose."})
             resp = create(self._client, model, messages,
-                          temperature=0.0, max_tokens=2048)
+                          temperature=0.0, max_tokens=2048, **extra)
             return parse_json_object(resp.choices[0].message.content)
 
     def _vision(self, image_b64: str) -> dict:
@@ -107,7 +111,7 @@ class ChartAnalyzer:
              "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
         ]
         return self._chat(self._cfg.vision_model, VISION_SYSTEM_PROMPT, user,
-                          force_json=False)
+                          force_json=False, timeout=150.0)
 
     def _reason(self, obs: dict, session: SessionInfo,
                 news_report: Optional[dict]) -> dict:
