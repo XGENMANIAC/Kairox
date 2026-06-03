@@ -26,9 +26,20 @@ class TradeSightApp:
         # error instead of freezing the UI on "Starting…" for minutes.
         self._client = OpenAI(base_url=config.base_url, api_key=config.nim_api_key,
                               timeout=90.0, max_retries=1)
+        # Vision may run on a faster provider (e.g. Gemini); reuse the NIM
+        # client otherwise so we don't open a second identical connection.
+        if config.vision_on_separate_provider:
+            vision_client = OpenAI(base_url=config.vision_base_url,
+                                   api_key=config.vision_api_key,
+                                   timeout=90.0, max_retries=1)
+            log.info("vision provider: %s (%s)", config.vision_base_url,
+                     config.vision_model)
+        else:
+            vision_client = self._client
         self._capture = CaptureService(region=config.capture_region,
                                        diff_threshold=config.pixel_diff_threshold)
-        self._analyzer = ChartAnalyzer(self._client, config)
+        self._analyzer = ChartAnalyzer(self._client, config,
+                                       vision_client=vision_client)
         self._news = NewsService(self._client, config)
         self._ui_queue: "queue.Queue" = queue.Queue()
         self._stop = threading.Event()

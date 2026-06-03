@@ -45,3 +45,27 @@ def test_tuning_defaults_when_absent():
     cfg = Config.load(env={"NIM_API_KEY": "n", "TAVILY_API_KEY": "t"})
     assert cfg.pixel_diff_threshold == 2.0
     assert cfg.news_cache_ttl == 300
+
+
+def test_vision_stays_on_nim_without_vision_api_key():
+    cfg = Config.load(env={"NIM_API_KEY": "n", "TAVILY_API_KEY": "t"})
+    assert cfg.vision_api_key == "n"
+    assert cfg.vision_base_url == cfg.base_url
+    assert cfg.vision_on_separate_provider is False
+
+
+def test_vision_api_key_activates_gemini_endpoint_by_default():
+    cfg = Config.load(env={"NIM_API_KEY": "n", "TAVILY_API_KEY": "t",
+                           "VISION_API_KEY": "g", "VISION_MODEL": "gemini-2.5-flash"})
+    assert cfg.vision_api_key == "g"
+    assert "generativelanguage.googleapis.com" in cfg.vision_base_url
+    assert cfg.vision_model == "gemini-2.5-flash"
+    assert cfg.vision_on_separate_provider is True
+
+
+def test_explicit_vision_base_url_overrides_default():
+    cfg = Config.load(env={"NIM_API_KEY": "n", "TAVILY_API_KEY": "t",
+                           "VISION_API_KEY": "g",
+                           "VISION_BASE_URL": "https://api.groq.com/openai/v1"})
+    assert cfg.vision_base_url == "https://api.groq.com/openai/v1"
+    assert cfg.vision_on_separate_provider is True

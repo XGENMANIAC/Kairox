@@ -58,15 +58,16 @@ def _g(d: Any, *path, default=None):
 
 
 class ChartAnalyzer:
-    def __init__(self, client: Any, config: Config):
+    def __init__(self, client: Any, config: Config, vision_client: Any = None):
         self._client = client
+        self._vision_client = vision_client or client
         self._cfg = config
 
     @staticmethod
     def _parse_json(text: str) -> dict:
         return parse_json_object(text)
 
-    def _chat(self, model: str, system: str, user_content: Any,
+    def _chat(self, client: Any, model: str, system: str, user_content: Any,
               force_json: bool = True, timeout: Optional[float] = None) -> dict:
         """One call with one repair retry on bad JSON.
 
@@ -86,7 +87,7 @@ class ChartAnalyzer:
             {"role": "system", "content": system},
             {"role": "user", "content": user_content},
         ]
-        resp = create(self._client, model, messages,
+        resp = create(client, model, messages,
                       temperature=0.2, max_tokens=2048, **extra)
         content = resp.choices[0].message.content
         try:
@@ -95,7 +96,7 @@ class ChartAnalyzer:
             messages.append({"role": "assistant", "content": content or ""})
             messages.append({"role": "user",
                              "content": "Return ONLY valid JSON. No prose."})
-            resp = create(self._client, model, messages,
+            resp = create(client, model, messages,
                           temperature=0.0, max_tokens=2048, **extra)
             return parse_json_object(resp.choices[0].message.content)
 
@@ -110,7 +111,8 @@ class ChartAnalyzer:
             {"type": "image_url",
              "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
         ]
-        return self._chat(self._cfg.vision_model, VISION_SYSTEM_PROMPT, user,
+        return self._chat(self._vision_client, self._cfg.vision_model,
+                          VISION_SYSTEM_PROMPT, user,
                           force_json=False, timeout=150.0)
 
     def _reason(self, obs: dict, session: SessionInfo,
@@ -130,7 +132,8 @@ class ChartAnalyzer:
             f"Session context:\n{session_json}\n\n"
             "Decide the trade and return JSON."
         )
-        return self._chat(self._cfg.reasoning_model, REASONING_SYSTEM_PROMPT, user)
+        return self._chat(self._client, self._cfg.reasoning_model,
+                          REASONING_SYSTEM_PROMPT, user)
 
     @staticmethod
     def _candlestick_summary(obs: dict) -> Optional[str]:
