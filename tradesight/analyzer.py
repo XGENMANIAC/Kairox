@@ -66,14 +66,24 @@ class ChartAnalyzer:
     def _parse_json(text: str) -> dict:
         return parse_json_object(text)
 
-    def _chat(self, model: str, system: str, user_content: Any) -> dict:
-        """One call with one repair retry on bad JSON."""
+    def _chat(self, model: str, system: str, user_content: Any,
+              force_json: bool = True) -> dict:
+        """One call with one repair retry on bad JSON.
+
+        force_json toggles response_format. The vision model is left OFF: in
+        JSON mode it gets lazy and emits a bare ``{"chart_detected": true}``
+        instead of the full schema, so we use a plain call + robust parsing for
+        it. Text models (reasoning, news) keep JSON mode on — they honour it.
+        """
+        create = (create_json if force_json
+                  else lambda c, m, msgs, **kw:
+                  c.chat.completions.create(model=m, messages=msgs, **kw))
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user_content},
         ]
-        resp = create_json(self._client, model, messages,
-                           temperature=0.2, max_tokens=2048)
+        resp = create(self._client, model, messages,
+                      temperature=0.2, max_tokens=2048)
         content = resp.choices[0].message.content
         try:
             return parse_json_object(content)
@@ -81,17 +91,23 @@ class ChartAnalyzer:
             messages.append({"role": "assistant", "content": content or ""})
             messages.append({"role": "user",
                              "content": "Return ONLY valid JSON. No prose."})
-            resp = create_json(self._client, model, messages,
-                               temperature=0.0, max_tokens=2048)
+            resp = create(self._client, model, messages,
+                          temperature=0.0, max_tokens=2048)
             return parse_json_object(resp.choices[0].message.content)
 
     def _vision(self, image_b64: str) -> dict:
         user = [
-            {"type": "text", "text": "Read this chart and return JSON."},
+            {"type": "text",
+             "text": ("Analyze this chart and return the COMPLETE JSON report: "
+                      "metadata (pair + timeframe at minimum), market_structure, "
+                      "key_levels, chart_patterns, candlestick_patterns, and "
+                      "indicators — populated from what you actually see. "
+                      "Do not return only chart_detected.")},
             {"type": "image_url",
              "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
         ]
-        return self._chat(self._cfg.vision_model, VISION_SYSTEM_PROMPT, user)
+        return self._chat(self._cfg.vision_model, VISION_SYSTEM_PROMPT, user,
+                          force_json=False)
 
     def _reason(self, obs: dict, session: SessionInfo,
                 news_report: Optional[dict]) -> dict:
@@ -141,6 +157,15 @@ class ChartAnalyzer:
 
         pair = _g(obs, "metadata", "pair")
         timeframe = _g(obs, "metadata", "timeframe")
+
+        # Guard against a hollow vision report (e.g. a bare {"chart_detected":
+        # true}). Without real observations the reasoning model can only emit a
+        # meaningless 0%-confidence HOLD, so don't run it — flag for retry.
+        if not (pair or _g(obs, "market_structure", "trend")
+                or _g(obs, "key_levels", "support")
+                or _g(obs, "key_levels", "resistance")):
+            return Analysis(error="Couldn't read the chart fully — retrying",
+                            news_available=news_available)
 
         try:
             decision = self._reason(obs, session, news_report)

@@ -132,6 +132,16 @@ def test_vision_prose_degrades_to_no_chart():
     assert result.signal == "HOLD"
 
 
+def test_hollow_vision_report_does_not_produce_fake_hold():
+    # Vision returns a bare {"chart_detected": true} with no observations.
+    # We must NOT run reasoning (which would emit a meaningless 0% HOLD).
+    client = FakeClient(['{"chart_detected": true}'])
+    result = ChartAnalyzer(client, cfg()).analyze("b64", session(), None)
+    assert result.error is not None
+    assert "read the chart" in result.error.lower()
+    assert len(client.calls) == 1  # reasoning stage skipped
+
+
 def test_reasoning_bad_json_is_error_state():
     # A chart IS detected (valid vision JSON) but the reasoning model returns
     # garbage on both attempts -> that's a real failure, surfaced as an error.

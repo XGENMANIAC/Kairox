@@ -131,7 +131,10 @@ If the image contains NO trading chart at all (no candlesticks, no price axis),
 return EXACTLY this and nothing else:
 {"chart_detected": false}
 
-Otherwise return this structure (you may include "chart_detected": true):
+Otherwise, a chart IS present and you MUST return the full report below with
+metadata (at least "pair" and "timeframe") and every analysis section you can
+read populated from what you see. Do NOT return only {"chart_detected": true} —
+a report without metadata and analysis is invalid. Return this structure:
 
 {
   "metadata": {

@@ -47,6 +47,21 @@ class Overlay:
         self.root.lift()
         self.root.attributes("-topmost", True)
 
+    def _make_draggable(self, widget):
+        """Let the user reposition the borderless window by dragging `widget`."""
+        widget.bind("<ButtonPress-1>", self._drag_start, add="+")
+        widget.bind("<B1-Motion>", self._drag_move, add="+")
+
+    def _drag_start(self, event):
+        self._drag_off = (event.x_root - self.root.winfo_x(),
+                          event.y_root - self.root.winfo_y())
+
+    def _drag_move(self, event):
+        off = getattr(self, "_drag_off", None)
+        if off is None:
+            return
+        self.root.geometry(f"+{event.x_root - off[0]}+{event.y_root - off[1]}")
+
     def _place_right_edge(self):
         self.root.update_idletasks()
         sw = self.root.winfo_screenwidth()
@@ -64,11 +79,14 @@ class Overlay:
     def _build_panel(self):
         self._labels = {}
 
-        # --- fixed header (always visible at top) ---
+        # --- fixed header (always visible at top; drag handle) ---
         header = tk.Frame(self._panel, bg=_BG)
         header.pack(fill="x", side="top")
-        tk.Label(header, text="TradeSight AI", bg=_BG, fg=_FG,
-                 font=("Segoe UI", 10, "bold")).pack(side="left", padx=6, pady=4)
+        title = tk.Label(header, text="⠿ TradeSight AI", bg=_BG, fg=_FG,
+                         font=("Segoe UI", 10, "bold"), cursor="fleur")
+        title.pack(side="left", padx=6, pady=4)
+        self._make_draggable(header)
+        self._make_draggable(title)
         collapse = tk.Button(header, text="▼", bd=0, bg=_BG, fg=_FG,
                              activebackground=_ACCENT, cursor="hand2")
         collapse.configure(command=lambda: self._click(collapse, self._collapse))
