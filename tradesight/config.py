@@ -11,7 +11,7 @@ class ConfigError(Exception):
     """Raised when required configuration is missing."""
 
 
-DEFAULT_VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
+DEFAULT_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl"
 DEFAULT_REASONING_MODEL = "moonshotai/kimi-k2.6"
 DEFAULT_NEWS_MODEL = "meta/llama-3.3-70b-instruct"
 

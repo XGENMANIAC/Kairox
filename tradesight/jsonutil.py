@@ -5,6 +5,15 @@ import re
 from typing import Any
 
 _JSON_OBJ = re.compile(r"\{.*\}", re.DOTALL)
+_TRAILING_COMMA = re.compile(r",(\s*[}\]])")
+
+
+def _loads_lenient(text: str) -> dict:
+    """json.loads, but tolerate trailing commas (which some models emit)."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return json.loads(_TRAILING_COMMA.sub(r"\1", text))
 
 
 def create_json(client: Any, model: str, messages: list, **kwargs):
@@ -38,9 +47,9 @@ def parse_json_object(text: str) -> dict:
         if text.lstrip().lower().startswith("json"):
             text = text.lstrip()[4:]
     try:
-        return json.loads(text)
+        return _loads_lenient(text)
     except json.JSONDecodeError:
         match = _JSON_OBJ.search(text)
         if match:
-            return json.loads(match.group(0))
+            return _loads_lenient(match.group(0))
         raise

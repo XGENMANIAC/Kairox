@@ -76,6 +76,12 @@ def test_parse_json_extracts_embedded_object():
     assert ChartAnalyzer._parse_json('ok {"signal": "BUY"} bye')["signal"] == "BUY"
 
 
+def test_parse_json_tolerates_trailing_commas():
+    # Some models emit trailing commas, which strict json.loads rejects.
+    assert ChartAnalyzer._parse_json('{"a": [1, 2,], "b": 3,}') == {"a": [1, 2],
+                                                                     "b": 3}
+
+
 def test_no_chart_short_circuits():
     client = FakeClient(['{"chart_detected": false}'])
     result = ChartAnalyzer(client, cfg()).analyze("b64", session(), None)
