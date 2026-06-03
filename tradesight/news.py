@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import requests
 
 from .config import Config
-from .jsonutil import parse_json_object
+from .jsonutil import create_json, parse_json_object
 from .prompts import NEWS_SYSTEM_PROMPT
 
 _TAVILY_URL = "https://api.tavily.com/search"
@@ -72,9 +72,9 @@ class NewsService:
             "current_utc_time": datetime.now(timezone.utc).isoformat(),
             "tavily_results": items,
         }
-        resp = self._client.chat.completions.create(
-            model=self._cfg.news_model,
-            messages=[
+        resp = create_json(
+            self._client, self._cfg.news_model,
+            [
                 {"role": "system", "content": NEWS_SYSTEM_PROMPT},
                 {"role": "user", "content": json.dumps(payload)},
             ],

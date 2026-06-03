@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from .config import Config
 from .context import SessionInfo
-from .jsonutil import parse_json_object
+from .jsonutil import create_json, parse_json_object
 from .prompts import REASONING_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT
 
 
@@ -72,17 +72,17 @@ class ChartAnalyzer:
             {"role": "system", "content": system},
             {"role": "user", "content": user_content},
         ]
-        resp = self._client.chat.completions.create(
-            model=model, messages=messages, temperature=0.2, max_tokens=2048)
+        resp = create_json(self._client, model, messages,
+                           temperature=0.2, max_tokens=2048)
         content = resp.choices[0].message.content
         try:
             return parse_json_object(content)
-        except json.JSONDecodeError:
-            messages.append({"role": "assistant", "content": content})
+        except (json.JSONDecodeError, TypeError):
+            messages.append({"role": "assistant", "content": content or ""})
             messages.append({"role": "user",
                              "content": "Return ONLY valid JSON. No prose."})
-            resp = self._client.chat.completions.create(
-                model=model, messages=messages, temperature=0.0, max_tokens=2048)
+            resp = create_json(self._client, model, messages,
+                               temperature=0.0, max_tokens=2048)
             return parse_json_object(resp.choices[0].message.content)
 
     def _vision(self, image_b64: str) -> dict:
@@ -129,6 +129,10 @@ class ChartAnalyzer:
         news_available = news_report is not None
         try:
             obs = self._vision(image_b64)
+        except (json.JSONDecodeError, TypeError):
+            # Vision returned prose instead of JSON — it almost always does this
+            # when it sees no chart. Treat as "no chart" rather than a hard error.
+            return Analysis(chart_detected=False, news_available=news_available)
         except Exception as exc:  # noqa: BLE001 — surface as UI error, never crash
             return Analysis(error=f"vision: {exc}", news_available=news_available)
 

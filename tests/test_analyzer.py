@@ -120,8 +120,23 @@ def test_event_risk_from_news_report_when_decision_silent():
     assert result.event_risk_imminent is True
 
 
-def test_bad_json_then_error_state():
-    client = FakeClient(["not json at all", "still not json"])
+def test_vision_prose_degrades_to_no_chart():
+    # Vision returns prose (a refusal) on both the call and the repair retry.
+    # This almost always means "no chart visible", so we degrade gracefully to
+    # chart_detected=False rather than surfacing a scary error.
+    client = FakeClient(["I'm sorry, I cannot read a chart here.",
+                         "There is no chart in this image."])
+    result = ChartAnalyzer(client, cfg()).analyze("b64", session(), None)
+    assert result.chart_detected is False
+    assert result.error is None
+    assert result.signal == "HOLD"
+
+
+def test_reasoning_bad_json_is_error_state():
+    # A chart IS detected (valid vision JSON) but the reasoning model returns
+    # garbage on both attempts -> that's a real failure, surfaced as an error.
+    client = FakeClient([VISION, "not json", "still not json"])
     result = ChartAnalyzer(client, cfg()).analyze("b64", session(), None)
     assert result.error is not None
+    assert "reasoning" in result.error
     assert result.signal == "HOLD"
