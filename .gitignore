@@ -4,3 +4,4 @@ __pycache__/
 tradesight.log
 .dist/
 .venv/
+settings.json
