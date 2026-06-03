@@ -12,6 +12,7 @@ from .capture import CaptureService
 from .config import Config, ConfigError
 from .context import SessionContext
 from .news import NewsService
+from .settings import RuntimeSettings
 
 logging.basicConfig(
     filename="tradesight.log", level=logging.INFO,
@@ -45,10 +46,17 @@ class TradeSightApp:
         self._stop = threading.Event()
         self._refresh_now = threading.Event()
         self._last_pair: str | None = None
+        self._settings = RuntimeSettings.load()
 
         # Imported here so headless test environments can import this module.
         from .overlay import Overlay
-        self._overlay = Overlay(self._ui_queue, on_refresh=self._request_refresh)
+        self._overlay = Overlay(self._ui_queue, on_refresh=self._request_refresh,
+                                on_settings=self._open_settings)
+
+    def _open_settings(self):
+        # Runs on the Tk main thread (Settings button callback).
+        from .settings_window import SettingsWindow
+        SettingsWindow(self._overlay.root, self._settings)
 
     def _request_refresh(self):
         self._refresh_now.set()
