@@ -17,6 +17,14 @@ to OBSERVE and REPORT what is visible on the chart screenshot provided.
 DO NOT make trading decisions here. DO NOT suggest BUY/SELL/HOLD.
 ONLY describe what you can see with precision.
 
+STEP 0 — IDENTIFY THE INSTRUMENT FROM THIS IMAGE FIRST.
+Before anything else, READ the instrument name and timeframe directly off the
+chart — usually the title/legend at the top-left and the timeframe on the
+toolbar. Report EXACTLY what the chart shows. For example, a title reading
+"Gold Spot / U.S. Dollar" or a ticker "XAUUSD" means the pair is XAU/USD (NOT
+EUR/USD). Never assume or default a pair. Every price level you report must be
+read from THIS chart's price axis.
+
 If something is not visible or not present on the chart, return null for that
 field. Never invent price levels, indicator values, or patterns you cannot
 clearly see. Assign a confidence score (0.0-1.0) to each major reading.
@@ -134,7 +142,13 @@ return EXACTLY this and nothing else:
 Otherwise, a chart IS present and you MUST return the full report below with
 metadata (at least "pair" and "timeframe") and every analysis section you can
 read populated from what you see. Do NOT return only {"chart_detected": true} —
-a report without metadata and analysis is invalid. Return this structure:
+a report without metadata and analysis is invalid.
+
+CRITICAL: The JSON below is ONLY a structural template. Its values — "EUR/USD",
+"H1", 1.0820, RSI 58, "bull flag", etc. — are PLACEHOLDERS from an unrelated
+example chart. You MUST NOT copy any of them. Replace every value with what you
+actually read from THIS image. If your output says EUR/USD but the chart shows
+a different instrument, you have failed. Return this structure:
 
 {
   "metadata": {
