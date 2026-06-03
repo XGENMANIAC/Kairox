@@ -63,6 +63,14 @@ def test_vision_api_key_activates_gemini_endpoint_by_default():
     assert cfg.vision_on_separate_provider is True
 
 
+def test_vision_key_with_nim_model_raises():
+    with pytest.raises(ConfigError) as exc:
+        Config.load(env={"NIM_API_KEY": "n", "TAVILY_API_KEY": "t",
+                         "VISION_API_KEY": "g",
+                         "VISION_MODEL": "nvidia/nemotron-nano-12b-v2-vl"})
+    assert "VISION_MODEL" in str(exc.value)
+
+
 def test_explicit_vision_base_url_overrides_default():
     cfg = Config.load(env={"NIM_API_KEY": "n", "TAVILY_API_KEY": "t",
                            "VISION_API_KEY": "g",

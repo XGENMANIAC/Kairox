@@ -61,9 +61,21 @@ class Config:
         # Vision provider: if VISION_API_KEY is set, vision uses its own
         # base_url (defaulting to Gemini) + key; otherwise it stays on NIM.
         v_key = (env.get("VISION_API_KEY") or "").strip()
+        vision_model = env.get("VISION_MODEL", DEFAULT_VISION_MODEL)
         if v_key:
             vision_api_key = v_key
             vision_base_url = env.get("VISION_BASE_URL") or GEMINI_OPENAI_BASE
+            # Guard the common misconfiguration: a key for another provider but
+            # VISION_MODEL still pointing at a NIM model name.
+            nim_prefixes = ("nvidia/", "meta/", "moonshotai/", "mistralai/",
+                            "qwen/", "deepseek", "abacusai/")
+            if vision_model.startswith(nim_prefixes):
+                raise ConfigError(
+                    f"VISION_API_KEY is set (vision runs on a separate provider "
+                    f"at {vision_base_url}) but VISION_MODEL is '{vision_model}', "
+                    f"which is an NVIDIA NIM model. Set VISION_MODEL to a model "
+                    f"that provider serves, e.g. gemini-2.5-flash."
+                )
         else:
             vision_api_key = nim
             vision_base_url = env.get("VISION_BASE_URL") or DEFAULT_BASE_URL
@@ -71,7 +83,7 @@ class Config:
         return cls(
             nim_api_key=nim,
             tavily_api_key=tav,
-            vision_model=env.get("VISION_MODEL", DEFAULT_VISION_MODEL),
+            vision_model=vision_model,
             reasoning_model=env.get("REASONING_MODEL", DEFAULT_REASONING_MODEL),
             news_model=env.get("NEWS_MODEL", DEFAULT_NEWS_MODEL),
             vision_base_url=vision_base_url,
