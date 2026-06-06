@@ -40,6 +40,11 @@ class NewsService:
             self._cache[pair] = (self._now(), None)
             return None, False
 
+    def report_or_none(self, pair: str) -> Optional[dict]:
+        """Convenience for use as an analyzer news_provider callable."""
+        report, _ = self.report(pair)
+        return report
+
     def _fetch(self, pair: str) -> list[dict]:
         base, _, quote = pair.partition("/")
         query = f"{base} {quote} forex news today".strip()

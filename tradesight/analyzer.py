@@ -148,8 +148,9 @@ class ChartAnalyzer:
         return name
 
     def analyze(self, image_b64: str, session: SessionInfo,
-                news_report: Optional[dict],
-                on_stage: Optional[Any] = None) -> Analysis:
+                news_report: Optional[dict] = None,
+                on_stage: Optional[Any] = None,
+                news_provider: Optional[Any] = None) -> Analysis:
         news_available = news_report is not None
         if on_stage:
             on_stage("Reading chart…")
@@ -176,6 +177,12 @@ class ChartAnalyzer:
                 or _g(obs, "key_levels", "resistance")):
             return Analysis(error="Couldn't read the chart fully — retrying",
                             news_available=news_available)
+
+        # Web single-shot flow: fetch news for the pair vision just detected,
+        # before reasoning. Desktop passes news_report directly and skips this.
+        if news_report is None and news_provider is not None and pair:
+            news_report = news_provider(pair)
+            news_available = news_report is not None
 
         if on_stage:
             on_stage(f"Analyzing {pair or 'chart'}…")

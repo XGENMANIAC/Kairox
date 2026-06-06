@@ -156,3 +156,33 @@ def test_reasoning_bad_json_is_error_state():
     assert result.error is not None
     assert "reasoning" in result.error
     assert result.signal == "HOLD"
+
+
+def test_news_provider_fetches_for_detected_pair():
+    client = FakeClient([VISION, DECISION])
+    seen = {}
+
+    def provider(pair):
+        seen["pair"] = pair
+        return NEWS_REPORT
+
+    result = ChartAnalyzer(client, cfg()).analyze(
+        "b64", session(), None, news_provider=provider)
+    assert seen["pair"] == "XAU/USD"
+    assert result.news_available is True
+    assert result.news_impact == "Firm USD on jobs data pressures gold."
+
+
+def test_news_provider_skipped_when_report_supplied():
+    client = FakeClient([VISION, DECISION])
+    called = []
+    ChartAnalyzer(client, cfg()).analyze(
+        "b64", session(), NEWS_REPORT, news_provider=lambda p: called.append(p))
+    assert called == []  # explicit report wins; provider not invoked
+
+
+def test_news_provider_none_result_marks_unavailable():
+    client = FakeClient([VISION, DECISION])
+    result = ChartAnalyzer(client, cfg()).analyze(
+        "b64", session(), None, news_provider=lambda p: None)
+    assert result.news_available is False

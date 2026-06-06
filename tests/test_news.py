@@ -104,3 +104,12 @@ def test_tavily_failure_returns_unavailable():
     report, available = svc.report("EUR/USD")
     assert report is None
     assert available is False
+
+
+def test_report_or_none_returns_just_the_report():
+    class _Svc(NewsService):
+        def report(self, pair):  # stub the network path
+            return ({"summary": "x"}, True)
+
+    svc = _Svc(client=None, config=cfg())
+    assert svc.report_or_none("EUR/USD") == {"summary": "x"}
